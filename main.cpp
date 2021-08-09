@@ -97,6 +97,39 @@ static inline IScaleLayer* addBatchNorm2d(INetworkDefinition *network, std::map<
     return scale_1;
 }
 
+ILayer* addPRelu(INetworkDefinition *network, std::map<std::string, Weights>& weightMap, ITensor& input, std::string lname) {
+    float *gamma = (float*)weightMap[lname + ".weight"].values;
+    int len = weightMap[lname + ".weight"].count;
+
+    float *scval_1 = reinterpret_cast<float*>(malloc(sizeof(float) * len));
+    float *scval_2 = reinterpret_cast<float*>(malloc(sizeof(float) * len));
+    for (int i = 0; i < len; i++) {
+        scval_1[i] = -1.0;
+        scval_2[i] = -gamma[i];
+    }
+    Weights scale_1{ DataType::kFLOAT, scval_1, len };
+    Weights scale_2{ DataType::kFLOAT, scval_2, len };
+
+    float *shval = reinterpret_cast<float*>(malloc(sizeof(float) * len));
+    for (int i = 0; i < len; i++) {
+        shval[i] = 0.0;
+    }
+    Weights shift{ DataType::kFLOAT, shval, len };
+
+    float *pval = reinterpret_cast<float*>(malloc(sizeof(float) * len));
+    for (int i = 0; i < len; i++) {
+        pval[i] = 1.0;
+    }
+    Weights power{ DataType::kFLOAT, pval, len };
+
+    auto relu1 = network->addActivation(input, ActivationType::kRELU);
+    IScaleLayer* scale1 = network->addScale(input, ScaleMode::kCHANNEL, shift, scale_1, power);
+    auto relu2 = network->addActivation(*scale1->getOutput(0), ActivationType::kRELU);
+    IScaleLayer* scale2 = network->addScale(*relu2->getOutput(0), ScaleMode::kCHANNEL, shift, scale_2, power);
+    IElementWiseLayer* ew1 = network->addElementWise(*relu1->getOutput(0), *scale2->getOutput(0), ElementWiseOperation::kSUM);
+    return ew1;
+}
+
 ILayer *IBasicBlock(INetworkDefinition *network, std::map<std::string, Weights> &weightMap, ITensor &input, int outch, int stride, std::string lname, int downdim=0){
     Weights emptywts{DataType::kFLOAT, nullptr, 0};
 
@@ -106,7 +139,7 @@ ILayer *IBasicBlock(INetworkDefinition *network, std::map<std::string, Weights> 
     conv1->setPaddingNd(DimsHW{1, 1});
 
     IScaleLayer *bn2 = addBatchNorm2d(network, weightMap, *conv1->getOutput(0), lname + ".bn2", 1e-5);
-    IActivationLayer *prelu = network->addActivation(*bn2->getOutput(0), ActivationType::kRELU);
+    ILayer *prelu = addPRelu(network, weightMap, *bn2->getOutput(0), lname + ".prelu");
 
     IConvolutionLayer *conv2 = network->addConvolutionNd(*prelu->getOutput(0), outch, DimsHW{3, 3}, weightMap[lname + ".conv2.weight"], emptywts);
     conv2->setStrideNd(DimsHW{stride, stride});
@@ -115,7 +148,8 @@ ILayer *IBasicBlock(INetworkDefinition *network, std::map<std::string, Weights> 
     IScaleLayer *bn3 = addBatchNorm2d(network, weightMap, *conv2->getOutput(0), lname + ".bn3", 1e-5);
 
     if (downdim == 0){
-        return bn3;
+        IElementWiseLayer *ew = network->addElementWise(*bn3->getOutput(0), input, ElementWiseOperation::kSUM);
+        return ew;
     }
     else {
         IConvolutionLayer *conv = network->addConvolutionNd(input, downdim, DimsHW{1, 1}, weightMap[lname + ".downsample.0.weight"], emptywts);
@@ -141,7 +175,7 @@ ICudaEngine *createEngine(unsigned int maxBatchSize, IBuilder *builder, IBuilder
     conv1->setStrideNd(DimsHW{1, 1});
     conv1->setPaddingNd(DimsHW{1, 1});
     IScaleLayer *bn1 = addBatchNorm2d(network, weightMap, *conv1->getOutput(0), "bn1", 1e-5);
-    IActivationLayer *prelu = network->addActivation(*bn1->getOutput(0), ActivationType::kRELU);
+    ILayer *prelu = addPRelu(network, weightMap, *bn1->getOutput(0), "prelu");
 
     ILayer *x = IBasicBlock(network, weightMap, *prelu->getOutput(0), 64, 2, "layer1.0", 64);
     x = IBasicBlock(network, weightMap, *x->getOutput(0), 64, 1, "layer1.1");
@@ -254,37 +288,22 @@ int main(int argc, char **argv){
     IExecutionContext *context = engine->createExecutionContext();
     delete[] trtModelStream;
 
-    cv::Mat img = cv::imread("/home/ducnt/QtProjects/arcface_trt/mtp.png");
+    cv::Mat img = cv::imread("../mtp.png");
     cv::resize(img, img, cv::Size(INPUT_W, INPUT_H));
-//    for(int b=0; b<BATCH_SIZE; b++){
-//        float *p_data = &data[b * 3 * INPUT_H * INPUT_W];
-//        for (int i=0; i< 3*INPUT_H*INPUT_W; i+=3){
-////            p_data[i] = (img.at<cv::Vec3b>(i/3)[2]/255.0 - 0.5)/0.5;
-////            p_data[i + 1] = (img.at<cv::Vec3b>(i/3)[1]/255.0 - 0.5)/0.5;
-////            p_data[i + 2] = (img.at<cv::Vec3b>(i/3)[0]/255.0 - 0.5)/0.5;
-//            p_data[i] = img.at<cv::Vec3b>(i/3)[2];
-//            p_data[i + 1] = img.at<cv::Vec3b>(i/3)[1];
-//            p_data[i + 2] = img.at<cv::Vec3b>(i/3)[0];
-//        }
-//    }
 
     for (int b=0; b<BATCH_SIZE; b++){
         float *p_data = &data[b * 3 * INPUT_H * INPUT_W];
         for (int i=0; i<INPUT_H*INPUT_W; i++){
-//            p_data[i] = img.at<cv::Vec3b>(i)[2];
-//            p_data[i + INPUT_H*INPUT_W] = img.at<cv::Vec3b>(i)[1];
-//            p_data[i + 2*INPUT_H*INPUT_W] = img.at<cv::Vec3b>(i)[0];
             p_data[i] = (img.at<cv::Vec3b>(i)[2]/255.0 - 0.5)/0.5;
             p_data[i + INPUT_H*INPUT_W] = (img.at<cv::Vec3b>(i)[1]/255.0 - 0.5)/0.5;
             p_data[i + 2*INPUT_H*INPUT_W] = (img.at<cv::Vec3b>(i)[0]/255.0 - 0.5)/0.5;
         }
     }
 
-    for(int i=0; i<10; i++)
-        std::cout<<data[i]<<' ';
-    std::cout<<'\n';
-
+    auto start = std::chrono::system_clock::now();
     doInference(*context, data, prob, BATCH_SIZE);
+    auto end = std::chrono::system_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 
     std::freopen("mtp_feat.txt", "w", stdout);
     for(int i=0; i<OUTPUT_SIZE; i++){
