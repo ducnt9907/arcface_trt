@@ -162,8 +162,11 @@ ICudaEngine *createEngine(unsigned int maxBatchSize, IBuilder *builder, IBuilder
 
     builder->setMaxBatchSize(1);
     config->setMaxWorkspaceSize(1<<20);
+//    config->setFlag(BuilderFlag::kFP16);
 
-    ICudaEngine *engine = builder->buildEngineWithConfig(*network, *config);
+    std::cout << "Building engine, please wait for a while..." << std::endl;
+    ICudaEngine* engine = builder->buildEngineWithConfig(*network, *config);
+    std::cout << "Build engine successfully!" << std::endl;
 
     network->destroy();
     for (auto &mem: weightMap){
@@ -178,6 +181,7 @@ void APIToModel(unsigned int maxBatchSize, IHostMemory** modelStream) {
     IBuilderConfig *config = builder->createBuilderConfig();
 
     ICudaEngine *engine = createEngine(maxBatchSize, builder, config, DataType::kFLOAT);
+    assert(engine != nullptr);
     (*modelStream) = engine->serialize();
 
     engine->destroy();
@@ -217,7 +221,6 @@ int main(int argc, char **argv){
         IHostMemory *modelStream{nullptr};
         APIToModel(BATCH_SIZE, &modelStream);
         assert(modelStream != nullptr);
-
         std::ofstream p("arcface_r18.engine", std::ios::binary);
         if (!p){
             std::cerr << "could not open plan output file\n";
@@ -229,7 +232,7 @@ int main(int argc, char **argv){
     }
     else
         if (std::string(argv[1]) == "-d"){
-            std::ifstream file("vgg.engine", std::ios::binary);
+            std::ifstream file("arcface_r18.engine", std::ios::binary);
             if (file.good()){
                 file.seekg(0, file.end);
                 size = file.tellg();
@@ -251,18 +254,42 @@ int main(int argc, char **argv){
     IExecutionContext *context = engine->createExecutionContext();
     delete[] trtModelStream;
 
-    cv::Mat img = cv::imread("/home/ducnt/QtProjects/vgg_tensorrtx/data_test/dog.jpg");
+    cv::Mat img = cv::imread("/home/ducnt/QtProjects/arcface_trt/mtp.png");
     cv::resize(img, img, cv::Size(INPUT_W, INPUT_H));
-    for(int b=0; b<BATCH_SIZE; b++){
+//    for(int b=0; b<BATCH_SIZE; b++){
+//        float *p_data = &data[b * 3 * INPUT_H * INPUT_W];
+//        for (int i=0; i< 3*INPUT_H*INPUT_W; i+=3){
+////            p_data[i] = (img.at<cv::Vec3b>(i/3)[2]/255.0 - 0.5)/0.5;
+////            p_data[i + 1] = (img.at<cv::Vec3b>(i/3)[1]/255.0 - 0.5)/0.5;
+////            p_data[i + 2] = (img.at<cv::Vec3b>(i/3)[0]/255.0 - 0.5)/0.5;
+//            p_data[i] = img.at<cv::Vec3b>(i/3)[2];
+//            p_data[i + 1] = img.at<cv::Vec3b>(i/3)[1];
+//            p_data[i + 2] = img.at<cv::Vec3b>(i/3)[0];
+//        }
+//    }
+
+    for (int b=0; b<BATCH_SIZE; b++){
         float *p_data = &data[b * 3 * INPUT_H * INPUT_W];
-        for (int i=0; i< 3*INPUT_H*INPUT_W; i+=3){
-            p_data[i] = img.at<cv::Vec3b>(i/3)[0];
-            p_data[i + 1] = img.at<cv::Vec3b>(i/3)[1];
-            p_data[i + 2] = img.at<cv::Vec3b>(i/3)[2];
+        for (int i=0; i<INPUT_H*INPUT_W; i++){
+//            p_data[i] = img.at<cv::Vec3b>(i)[2];
+//            p_data[i + INPUT_H*INPUT_W] = img.at<cv::Vec3b>(i)[1];
+//            p_data[i + 2*INPUT_H*INPUT_W] = img.at<cv::Vec3b>(i)[0];
+            p_data[i] = (img.at<cv::Vec3b>(i)[2]/255.0 - 0.5)/0.5;
+            p_data[i + INPUT_H*INPUT_W] = (img.at<cv::Vec3b>(i)[1]/255.0 - 0.5)/0.5;
+            p_data[i + 2*INPUT_H*INPUT_W] = (img.at<cv::Vec3b>(i)[0]/255.0 - 0.5)/0.5;
         }
     }
 
+    for(int i=0; i<10; i++)
+        std::cout<<data[i]<<' ';
+    std::cout<<'\n';
+
     doInference(*context, data, prob, BATCH_SIZE);
 
+    std::freopen("mtp_feat.txt", "w", stdout);
+    for(int i=0; i<OUTPUT_SIZE; i++){
+        std::cout<<prob[i]<<' ';
+    }
+    std::cout<<'\n';
     return 0;
 }
