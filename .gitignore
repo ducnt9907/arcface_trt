@@ -1,3 +1,9 @@
+# ignore file weight of tensorrt model
+*.wts
+
+# ignore build folder
+build/
+
 # Prerequisites
 *.d
 
@@ -30,3 +36,5 @@
 *.exe
 *.out
 *.app
+
+
