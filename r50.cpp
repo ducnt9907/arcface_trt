@@ -285,7 +285,8 @@ int main(int argc, char **argv){
                 file.close();
             }
         }
-        else return -1;
+        else
+            return -1;
 
     // prepare input data ---------------------------
     static float data[BATCH_SIZE * 3 * INPUT_H * INPUT_W];
@@ -296,7 +297,7 @@ int main(int argc, char **argv){
     IExecutionContext *context = engine->createExecutionContext();
     delete[] trtModelStream;
 
-    cv::Mat img = cv::imread("../mtp.png");
+    cv::Mat img = cv::imread("../vietth.jpg");
     cv::resize(img, img, cv::Size(INPUT_W, INPUT_H));
 
     for (int b=0; b<BATCH_SIZE; b++){
@@ -313,9 +314,9 @@ int main(int argc, char **argv){
     auto end = std::chrono::system_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 
-    std::freopen("mtp_feat.txt", "w", stdout);
+    std::freopen("vietth_feat.txt", "w", stdout);
     for(int i=0; i<OUTPUT_SIZE; i++){
-        std::cout<<prob[i]<<' ';
+        std::cout<<std::fixed<<std::setprecision(15)<<prob[i]<<' ';
     }
     std::cout<<'\n';
     return 0;

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.21)
 
 project(arcface_trt)
 
@@ -31,10 +31,10 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 #target_link_libraries(run cudart)
 #target_link_libraries(run ${OpenCV_LIBRARIES})
 
-#add_executable(r50 ${PROJECT_SOURCE_DIR}/r50.cpp)
-#target_link_libraries(r50 nvinfer)
-#target_link_libraries(r50 cudart)
-#target_link_libraries(r50 ${OpenCV_LIBRARIES})
+add_executable(r50 ${PROJECT_SOURCE_DIR}/r50.cpp)
+target_link_libraries(r50 nvinfer)
+target_link_libraries(r50 cudart)
+target_link_libraries(r50 ${OpenCV_LIBRARIES})
 
 add_executable(r100 ${PROJECT_SOURCE_DIR}/r100.cpp)
 target_link_libraries(r100 nvinfer)
