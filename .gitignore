@@ -1,5 +1,6 @@
 # ignore file weight of tensorrt model
 *.wts
+*.onnx
 
 # ignore build folder
 build/

@@ -20,15 +20,31 @@ else()
     link_directories(/usr/local/cuda/lib64)
 endif()
 
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Ofast -Wfatal-errors -D_MWAITXINTRIN_H_INCLUDED")
 
 find_package(OpenCV NO_DEFAULT_PATH PATHS "/home/ducnt/installation/OpenCV-master")
 include_directories(${OpenCV_INCLUDE_DIRS})
 
-add_executable(run ${PROJECT_SOURCE_DIR}/main.cpp)
-target_link_libraries(run nvinfer)
-target_link_libraries(run cudart)
-target_link_libraries(run ${OpenCV_LIBRARIES})
+#add_executable(run ${PROJECT_SOURCE_DIR}/main.cpp)
+#target_link_libraries(run nvinfer)
+#target_link_libraries(run cudart)
+#target_link_libraries(run ${OpenCV_LIBRARIES})
 
+#add_executable(r50 ${PROJECT_SOURCE_DIR}/r50.cpp)
+#target_link_libraries(r50 nvinfer)
+#target_link_libraries(r50 cudart)
+#target_link_libraries(r50 ${OpenCV_LIBRARIES})
+
+add_executable(r100 ${PROJECT_SOURCE_DIR}/r100.cpp)
+target_link_libraries(r100 nvinfer)
+target_link_libraries(r100 cudart)
+target_link_libraries(r100 ${OpenCV_LIBRARIES})
+
+add_executable(r100_onnx ${PROJECT_SOURCE_DIR}/r100_onnx.cpp)
+target_link_libraries(r100_onnx nvinfer)
+target_link_libraries(r100_onnx nvonnxparser)
+target_link_libraries(r100_onnx cudart)
+target_link_libraries(r100_onnx ${OpenCV_LIBRARIES})
 
 add_definitions(-O2 -pthread)
